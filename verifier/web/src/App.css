@@ -1,0 +1,497 @@
+/* "Regulatory Ledger" design system, reused directly from the prior Assay
+   project — paper background, Source Serif 4 + IBM Plex Mono, hairline
+   borders, square corners, stamp-style status badges, redaction bars for
+   private data. Manufacturer/Home-specific rules dropped (this app has no
+   institution-side or landing-page view); identity/server-status rules
+   added for this app's own header pieces. */
+
+.page {
+  width: 1180px;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 36px 20px;
+  box-sizing: border-box;
+  text-align: left;
+}
+
+/* ─── Header ──────────────────────────────────────────────────────── */
+
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 22px;
+  padding: 0 4px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.wordmark-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.wordmark {
+  font: 700 20px var(--serif);
+  font-style: italic;
+}
+
+.eyebrow {
+  font: 400 11px var(--mono);
+  color: var(--ink-50);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.eyebrow.tc {
+  text-align: center;
+}
+
+.server-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.server-status input {
+  font: 400 11px var(--mono);
+  padding: 5px 8px;
+  border: 1px solid var(--ink-25);
+  background: var(--panel);
+  color: var(--ink-60);
+  width: 220px;
+}
+
+.ok-dot,
+.danger-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.ok-dot {
+  background: var(--green);
+}
+
+.danger-dot {
+  background: var(--rust);
+}
+
+/* ─── Tab bar ─────────────────────────────────────────────────────── */
+
+.tab-bar {
+  display: flex;
+  gap: 32px;
+  padding: 0 4px;
+  border-bottom: 2px solid var(--ink);
+  margin: 0;
+}
+
+.tab {
+  cursor: pointer;
+  padding: 14px 0;
+  margin: 0 0 -2px;
+  font: 600 12.5px var(--mono);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-35);
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+}
+
+.tab.active {
+  color: var(--ink);
+  border-bottom-color: var(--ink);
+}
+
+/* ─── Panel ───────────────────────────────────────────────────────── */
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--ink-18);
+  border-top: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  padding: 38px 44px 46px;
+}
+
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* ─── Text utility ────────────────────────────────────────────────── */
+
+.hint {
+  font: 400 12px var(--serif);
+  color: var(--ink-55);
+}
+
+.error {
+  color: var(--rust);
+  font: 400 13px var(--serif);
+}
+
+.success {
+  color: var(--green);
+  font: 400 13px var(--serif);
+}
+
+.ok-text {
+  color: var(--green);
+  font-weight: 600;
+}
+
+.danger-text {
+  color: var(--rust);
+  font-weight: 600;
+}
+
+/* ─── Cards / panels ──────────────────────────────────────────────── */
+
+.card {
+  border: 1px solid var(--ink-25);
+  padding: 20px 22px;
+  background: var(--panel);
+}
+
+.identity-card {
+  background: var(--panel-alt);
+}
+
+.identity-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* ─── Forms ───────────────────────────────────────────────────────── */
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font: 400 12px var(--serif);
+  color: var(--ink);
+  margin-bottom: 10px;
+}
+
+label.checkbox-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font: 400 12.5px var(--mono);
+}
+
+input[type='text'],
+input[type='number'],
+select,
+textarea {
+  font: 400 12.5px var(--mono);
+  padding: 8px 10px;
+  border: 1px solid var(--ink-25);
+  background: var(--panel);
+  color: var(--ink);
+  box-sizing: border-box;
+}
+
+textarea {
+  font-size: 12px;
+  resize: vertical;
+}
+
+/* ─── Buttons ─────────────────────────────────────────────────────── */
+
+button {
+  font: 600 11px var(--mono);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 9px 16px;
+  border: 1.5px solid transparent;
+  background: var(--gold);
+  color: var(--ink);
+  cursor: pointer;
+  margin: 0 8px 8px 0;
+}
+
+button:hover:not(:disabled) {
+  background: var(--gold-hover);
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+button.secondary {
+  background: transparent;
+  border-color: var(--ink-25);
+  color: var(--ink);
+}
+
+button.secondary:hover:not(:disabled) {
+  border-color: var(--ink);
+}
+
+/* ─── Stamps ──────────────────────────────────────────────────────── */
+
+.stamp {
+  display: inline-block;
+  border: 3px double;
+  font: 700 17px var(--mono);
+  letter-spacing: 0.08em;
+  padding: 9px 16px;
+  transform: rotate(-4deg);
+  flex-shrink: 0;
+}
+
+.stamp-pass {
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.stamp-fail {
+  border-color: var(--rust);
+  color: var(--rust);
+}
+
+.stamp-center {
+  display: block;
+  margin: 0 auto 18px;
+  width: fit-content;
+}
+
+/* ─── Verifier ────────────────────────────────────────────────────── */
+
+.cert-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 20px;
+}
+
+.scope-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+/* ─── Consumer check ──────────────────────────────────────────────── */
+
+.consumer-view {
+  align-items: center;
+}
+
+.scan-card {
+  width: 420px;
+  max-width: 100%;
+  border: 1px solid var(--ink-25);
+  background: var(--panel-alt);
+  padding: 30px 28px 34px;
+  box-sizing: border-box;
+}
+
+.scan-result-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-top: 1px solid var(--ink-15);
+  border-bottom: 1px solid var(--ink-15);
+  font: 400 12px var(--serif);
+  margin: 16px 0 20px;
+}
+
+/* ─── Privacy Inspector ───────────────────────────────────────────── */
+
+.privacy-inspector {
+  border: 1.5px solid var(--ink);
+  padding: 30px 34px 34px;
+}
+
+.privacy-inspector.compact {
+  padding: 20px 18px 22px;
+}
+
+.privacy-inspector-heading {
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+.privacy-inspector-heading h2 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.compact .privacy-inspector-heading {
+  margin-bottom: 16px;
+}
+
+.compact .privacy-inspector-heading h2 {
+  font-size: 15px;
+}
+
+.pi-subtitle {
+  margin: 6px 0 0;
+  font: 400 12.5px var(--serif);
+  color: var(--ink-55);
+}
+
+.compact .pi-subtitle {
+  font-size: 10.5px;
+}
+
+.privacy-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 76px minmax(0, 1fr);
+
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.privacy-column-label {
+  font: 600 12px var(--mono);
+  letter-spacing: 0.08em;
+  margin-bottom: 16px;
+}
+
+.private-column .privacy-column-label,
+.private-label {
+  color: var(--rust);
+}
+
+.public-column .privacy-column-label,
+.public-label {
+  color: var(--green);
+}
+
+.compact .privacy-column-label {
+  font-size: 10px;
+  margin-bottom: 8px;
+}
+
+.compact .public-label {
+  margin-top: 14px;
+}
+
+.privacy-pivot-compact {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 0;
+  font: 400 10.5px var(--mono);
+  color: var(--ink-50);
+}
+
+.pivot-badge-sm {
+  width: 26px;
+  height: 26px;
+  font-size: 9px;
+}
+
+.privacy-box {
+  border: 1px solid;
+}
+
+.private-box {
+  border-color: var(--rust-border-35);
+}
+
+.public-box {
+  border-color: var(--green-border-35);
+}
+
+.privacy-field {
+  padding: 16px 20px;
+  font: 400 13px var(--mono);
+}
+
+.private-box .privacy-field {
+  border-bottom: 1px solid var(--rust-border-20);
+}
+
+.public-box .privacy-field {
+  border-bottom: 1px solid var(--green-border-20);
+}
+
+.privacy-field:last-child {
+  border-bottom: none;
+}
+
+.privacy-field-label {
+  color: var(--ink-55);
+  margin-bottom: 7px;
+}
+
+.privacy-field-value {
+  font: 400 13px var(--mono);
+}
+
+.pi-empty {
+  padding: 16px 20px;
+}
+
+.redaction-bar {
+  height: 15px;
+  background: var(--ink);
+}
+
+.compact .privacy-field {
+  padding: 10px 14px;
+  font-size: 11px;
+}
+
+.compact .redaction-bar {
+  height: 11px;
+}
+
+.privacy-pivot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 70px;
+  gap: 12px;
+}
+
+.pivot-line {
+  width: 1px;
+  height: 70px;
+  background: var(--ink-25);
+}
+
+.pivot-badge {
+  width: 46px;
+  height: 46px;
+  border: 1.5px solid var(--gold);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 700 13px var(--mono);
+  color: var(--gold);
+  flex-shrink: 0;
+}
+
+.privacy-disclosed {
+  margin-top: 24px;
+  padding: 14px 18px;
+  border: 1px solid var(--ink-25);
+  background: var(--panel-alt);
+  font: 400 12.5px var(--serif);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.privacy-disclosed strong {
+  color: var(--ink);
+  font: 700 15px var(--mono);
+}

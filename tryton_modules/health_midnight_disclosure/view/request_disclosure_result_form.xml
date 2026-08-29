@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+
+<form>
+    <label name="record_id"/>
+    <field name="record_id"/>
+    <label name="contract_address"/>
+    <field name="contract_address"/>
+    <newline/>
+    <separator name="vaccination_note" string="Vaccination"/>
+    <label name="vaccination_note" colspan="4"/>
+    <field name="vaccination_note" colspan="4"/>
+    <separator name="lab_result_note" string="Lab Result"/>
+    <label name="lab_result_note" colspan="4"/>
+    <field name="lab_result_note" colspan="4"/>
+    <separator name="critical_flags_note" string="Critical Flags"/>
+    <label name="critical_flags_note" colspan="4"/>
+    <field name="critical_flags_note" colspan="4"/>
+</form>

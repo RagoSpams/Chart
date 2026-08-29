@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+
+<tryton>
+    <data>
+
+        <record model="ir.ui.view" id="request_disclosure_result_view_form">
+            <field name="model">health_midnight_disclosure.request_disclosure.result</field>
+            <field name="type">form</field>
+            <field name="name">request_disclosure_result_form</field>
+        </record>
+
+        <!-- "Request Disclosure" button on the patient view — same
+             ir.action.wizard + ir.action.keyword(form_action) pattern
+             health_imaging uses for its "Generate Result" button. -->
+        <record model="ir.action.wizard" id="act_request_disclosure">
+            <field name="name">Request Disclosure</field>
+            <field name="wiz_name">health_midnight_disclosure.request_disclosure</field>
+            <field name="model">gnuhealth.patient</field>
+        </record>
+        <record model="ir.action.keyword" id="act_request_disclosure_keyword">
+            <field name="keyword">form_action</field>
+            <field name="model">gnuhealth.patient,-1</field>
+            <field name="action" ref="act_request_disclosure"/>
+        </record>
+
+    </data>
+</tryton>

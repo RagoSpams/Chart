@@ -1,0 +1,40 @@
+{
+  "name": "gnuhealth-midnight",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "GNU Health x Midnight — scoped, revocable disclosure of health-record predicates without exposing the underlying record. Hackathon project for the \"Integrate Midnight\" track.",
+  "license": "MIT",
+  "workspaces": [
+    "contracts",
+    "bridge",
+    "verifier/server",
+    "verifier/web"
+  ],
+  "scripts": {
+    "compile": "npm run compile -w contracts",
+    "build": "npm run build --workspaces --if-present",
+    "dev:bridge": "npm run dev -w bridge",
+    "dev:verifier-server": "npm run dev -w verifier/server",
+    "dev:verifier-web": "npm run dev -w verifier/web",
+    "devnet:up": "docker compose up -d --wait",
+    "devnet:down": "docker compose down",
+    "devnet:logs": "docker compose logs -f",
+    "clean": "npm run clean --workspaces --if-present && rm -rf node_modules"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "tsx": "^4.23.12"
+  },
+  "allowScripts": {
+    "classic-level@3.0.0": true,
+    "msgpackr-extract@3.0.4": true,
+    "esbuild@0.28.2": true
+  },
+  "overrides": {
+    "@midnight-ntwrk/onchain-runtime-v3": "3.1.0"
+  }
+}

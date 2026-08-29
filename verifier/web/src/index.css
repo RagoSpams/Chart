@@ -1,0 +1,85 @@
+/* "Regulatory Ledger" design system, reused directly from the prior Assay
+   project (paper/cream aesthetic, Source Serif 4 + IBM Plex Mono, hairline
+   borders, stamp-style badges) — fits a regulator/researcher-facing tool
+   just as well here. Single fixed light aesthetic, same reasoning as there:
+   no dark variant was ever designed for this look. */
+:root {
+  --paper: #ede7d8;
+  --panel: #f5f1e8;
+  --panel-alt: #fbf8f0;
+
+  --ink: #1c1a16;
+  --ink-60: rgba(28, 24, 18, 0.6);
+  --ink-55: rgba(28, 24, 18, 0.55);
+  --ink-50: rgba(28, 24, 18, 0.5);
+  --ink-40: rgba(28, 24, 18, 0.4);
+  --ink-35: rgba(28, 24, 18, 0.35);
+  --ink-25: rgba(28, 24, 18, 0.25);
+  --ink-18: rgba(28, 24, 18, 0.18);
+  --ink-15: rgba(28, 24, 18, 0.15);
+  --ink-10: rgba(28, 24, 18, 0.1);
+
+  --green: #2b6b3f;
+  --green-border-35: rgba(43, 107, 63, 0.35);
+  --green-border-20: rgba(43, 107, 63, 0.2);
+
+  --rust: #96491e;
+  --rust-border-35: rgba(150, 73, 30, 0.35);
+  --rust-border-20: rgba(150, 73, 30, 0.2);
+  --rust-bg: rgba(150, 73, 30, 0.1);
+
+  --gold: #b8862b;
+  --gold-hover: #b07f28;
+
+  --link: #1f5c4f;
+  --link-hover: #17453a;
+
+  --serif: 'Source Serif 4', Georgia, serif;
+  --mono: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
+
+  font: 15px/1.5 var(--serif);
+  color-scheme: light;
+  color: var(--ink);
+  background: var(--paper);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+a {
+  color: var(--link);
+}
+a:hover {
+  color: var(--link-hover);
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--serif);
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0 0 8px;
+}
+
+p {
+  margin: 0;
+}
+
+code {
+  font-family: var(--mono);
+  font-size: 0.9em;
+  color: var(--ink);
+}

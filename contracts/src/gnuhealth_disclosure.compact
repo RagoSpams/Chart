@@ -1,0 +1,389 @@
+pragma language_version >= 0.23;
+
+import CompactStandardLibrary;
+
+// GNU Health x Midnight — scoped, revocable disclosure of three health-record
+// predicates (vaccination status, lab results, critical allergy/medical
+// flags) without exposing the underlying record. See PLAN.md for the full
+// design and Prompt 1's real-schema findings this is grounded in.
+//
+// Domain-separation strings (inlined at each call site via pad(), since
+// Compact wants a literal there — kept here as the single source of truth
+// for what each one is):
+//   "GNUHEALTH_INSTITUTION_ID_V1" — institutionSecret -> public institutionId
+//   "GNUHEALTH_RECIPIENT_ID_V1"   — recipientSecret -> public recipientPubKey
+//
+// Bundle commitments below use plain persistentCommit(data, salt) with no
+// extra domain separation beyond the three struct types already being
+// distinct (VaccinationData/LabResultData/CriticalFlagsData can't collide).
+//
+// Disease/pathology was considered and dropped as a fourth category (weaker
+// demo story) — critAllergic below lives directly on gnuhealth.patient, so
+// this stays fully independent of the dropped gnuhealth.patient.disease /
+// gnuhealth.pathology tables.
+
+// ─── Record bundle data shapes ───────────────────────────────────────────
+// Private witness data only — these never touch the ledger directly, only
+// their persistentCommit(...) hashes do (see submitRecordBundle below).
+
+struct VaccinationData {
+  // Hash of the GNU Health medicament code identifying the vaccine —
+  // derived off-chain by the bridge service from gnuhealth.vaccination's
+  // `vaccine` field. Disclosed at verify time (the recipient already knows
+  // which vaccine they're asking about); everything else here stays private.
+  vaccineId: Bytes<32>,
+  dose: Uint<16>,
+  // Unix seconds, from gnuhealth.vaccination `date`.
+  administeredDate: Uint<64>,
+  // false means no further dose is scheduled (gnuhealth.vaccination
+  // `next_dose_date` is null) — this flag exists because Compact has no
+  // nullable/Option type, same treatment as the prior project's
+  // ColdChainEntry.readingPresent.
+  hasNextDose: Boolean,
+  nextDoseDate: Uint<64>,
+  // Pre-encoded from gnuhealth.vaccination `state` (e.g. 'done') by the
+  // bridge service — Compact has no useful string comparison here.
+  completed: Boolean,
+}
+
+struct LabResultData {
+  // Hash of the GNU Health lab_test_type code — analogous to vaccineId.
+  testTypeId: Bytes<32>,
+  // Parsed numeric result. gnuhealth.lab's real `results` field is free
+  // text; the bridge service is responsible for parsing a numeric value out
+  // of it before this witness is constructed.
+  resultValue: Uint<32>,
+  // Reference range, decided at submission time (mirrors GNU Health's own
+  // lab_test_critearea reference-range data for this test type) — not
+  // supplied by the verifier at proof time.
+  rangeLow: Uint<32>,
+  rangeHigh: Uint<32>,
+  analysisDate: Uint<64>,
+}
+
+struct CriticalFlagsData {
+  critDbt: Boolean,
+  critCardio: Boolean,
+  critAllergic: Boolean,
+  critCancer: Boolean,
+  critImmuno: Boolean,
+  critMental: Boolean,
+  critNutrition: Boolean,
+  critSocial: Boolean,
+  critCognitive: Boolean,
+}
+
+// ─── Patient record registry ─────────────────────────────────────────────
+
+struct PatientRecord {
+  institutionId: Bytes<32>,
+  vaccinationCommit: Bytes<32>,
+  labResultCommit: Bytes<32>,
+  criticalFlagsCommit: Bytes<32>,
+  withdrawn: Boolean,
+}
+
+export ledger recordRegistry: Map<Bytes<32>, PatientRecord>;
+
+// The submitting institution/clinician's identity secret. Never passed as a
+// circuit argument — supplied locally by the caller's SDK at proving time,
+// so it never transits as application data.
+witness institutionSecret(): Bytes<32>;
+
+// Derives the caller's public institutionId from their witnessed identity
+// secret. Every circuit below that gates on "are you this record's
+// submitting institution" needs the same derivation.
+export circuit deriveInstitutionId(): Bytes<32> {
+  return disclose(persistentHash<Vector<2, Bytes<32>>>([pad(32, "GNUHEALTH_INSTITUTION_ID_V1"), institutionSecret()]));
+}
+
+// Commits all three record bundles (vaccination, lab result, critical
+// flags) as salted hashes and registers the record. Fails if recordId is
+// already registered — no overwriting an existing record.
+//
+// recordId is an opaque, bridge-service-derived identifier (hash of the
+// Tryton patient id + a per-submission nonce known only to the
+// institution) — never the raw Tryton patient ID directly, so the on-chain
+// map can't be correlated back to a specific patient by an outside
+// observer. That derivation happens outside this contract.
+export circuit submitRecordBundle(
+  recordId: Bytes<32>,
+  vaccination: VaccinationData,
+  vaccinationSalt: Bytes<32>,
+  labResult: LabResultData,
+  labResultSalt: Bytes<32>,
+  criticalFlags: CriticalFlagsData,
+  criticalFlagsSalt: Bytes<32>,
+): [] {
+  const institutionId = deriveInstitutionId();
+
+  const vaccinationCommit = persistentCommit<VaccinationData>(vaccination, vaccinationSalt);
+  const labResultCommit = persistentCommit<LabResultData>(labResult, labResultSalt);
+  const criticalFlagsCommit = persistentCommit<CriticalFlagsData>(criticalFlags, criticalFlagsSalt);
+
+  const id = disclose(recordId);
+  assert(!recordRegistry.member(id), "Record already exists");
+
+  recordRegistry.insert(
+    id,
+    disclose(PatientRecord {
+      institutionId: institutionId,
+      vaccinationCommit: vaccinationCommit,
+      labResultCommit: labResultCommit,
+      criticalFlagsCommit: criticalFlagsCommit,
+      withdrawn: false,
+    })
+  );
+}
+
+// Marks a record withdrawn/superseded. Disables future token issuance for
+// it. Only the record's own submitting institution may withdraw it.
+export circuit withdrawRecordBundle(recordId: Bytes<32>): [] {
+  const institutionId = deriveInstitutionId();
+
+  const id = disclose(recordId);
+  assert(recordRegistry.member(id), "Record does not exist");
+  const record = recordRegistry.lookup(id);
+  assert(record.institutionId == institutionId, "Only this record's submitting institution may withdraw it");
+
+  // Map.insert() also replaces an existing key's value — there's no
+  // separate "update" — so this overwrites the record with withdrawn: true.
+  recordRegistry.insert(
+    id,
+    disclose(PatientRecord {
+      institutionId: record.institutionId,
+      vaccinationCommit: record.vaccinationCommit,
+      labResultCommit: record.labResultCommit,
+      criticalFlagsCommit: record.criticalFlagsCommit,
+      withdrawn: true,
+    })
+  );
+}
+
+// ─── Disclosure tokens ────────────────────────────────────────────────────
+// A token grants a specific recipient access to a specific subset of a
+// record's three bundles, until it expires or is revoked.
+//
+// Scope is three named booleans, one per bundle, rather than a packed
+// bitmask — Compact has no bitwise operators (confirmed against the
+// installed compiler: `>>`/`&` fail to parse/lex at all).
+
+struct TokenRecord {
+  recordId: Bytes<32>,
+  grantVaccination: Boolean,
+  grantLabResult: Boolean,
+  grantCriticalFlags: Boolean,
+  // Unix seconds, checked via kernel.blockTimeLessThan in verify*Bundle
+  // below — see the note on VaccinationData.nextDoseDate for why time, not
+  // block height.
+  expiryTime: Uint<64>,
+  recipientPubKey: Bytes<32>,
+  revoked: Boolean,
+}
+
+export ledger tokenRegistry: Map<Bytes<32>, TokenRecord>;
+
+// Issues an expiring, revocable disclosure token against an existing,
+// non-withdrawn record, scoped to whichever bundles grant* is true for.
+// Only the record's institution may issue tokens for it. recipientPubKey is
+// supplied by the caller (the institution), not derived here — it's
+// whatever public key the intended recipient shared out of band.
+export circuit issueDisclosureToken(
+  tokenId: Bytes<32>,
+  recordId: Bytes<32>,
+  grantVaccination: Boolean,
+  grantLabResult: Boolean,
+  grantCriticalFlags: Boolean,
+  expiryTime: Uint<64>,
+  recipientPubKey: Bytes<32>,
+): [] {
+  const institutionId = deriveInstitutionId();
+
+  const rId = disclose(recordId);
+  assert(recordRegistry.member(rId), "Record does not exist");
+  const record = recordRegistry.lookup(rId);
+  assert(record.institutionId == institutionId, "Only this record's submitting institution may issue tokens for it");
+  assert(!record.withdrawn, "Cannot issue a token for a withdrawn record");
+
+  const tId = disclose(tokenId);
+  assert(!tokenRegistry.member(tId), "Token already exists");
+  assert(grantVaccination || grantLabResult || grantCriticalFlags, "Token must grant access to at least one bundle");
+
+  tokenRegistry.insert(
+    tId,
+    disclose(TokenRecord {
+      recordId: rId,
+      grantVaccination: grantVaccination,
+      grantLabResult: grantLabResult,
+      grantCriticalFlags: grantCriticalFlags,
+      expiryTime: expiryTime,
+      recipientPubKey: recipientPubKey,
+      revoked: false,
+    })
+  );
+}
+
+// Invalidates a previously issued token. Only the institution who owns the
+// underlying record may revoke a token issued against it.
+export circuit revokeToken(tokenId: Bytes<32>): [] {
+  const institutionId = deriveInstitutionId();
+
+  const id = disclose(tokenId);
+  assert(tokenRegistry.member(id), "Token does not exist");
+  const token = tokenRegistry.lookup(id);
+
+  assert(recordRegistry.member(token.recordId), "Referenced record does not exist");
+  const record = recordRegistry.lookup(token.recordId);
+  assert(record.institutionId == institutionId, "Only the record's submitting institution may revoke this token");
+
+  // Map.insert() also replaces an existing key's value — see the note in
+  // withdrawRecordBundle above.
+  tokenRegistry.insert(
+    id,
+    disclose(TokenRecord {
+      recordId: token.recordId,
+      grantVaccination: token.grantVaccination,
+      grantLabResult: token.grantLabResult,
+      grantCriticalFlags: token.grantCriticalFlags,
+      expiryTime: token.expiryTime,
+      recipientPubKey: token.recipientPubKey,
+      revoked: true,
+    })
+  );
+}
+
+// ─── Bundle verification (the core privacy showpiece) ────────────────────
+// Each verify*Bundle circuit below discloses ONLY the narrow predicate
+// result — never the underlying bundle data. The caller must locally hold
+// that bundle's raw data + salt (shared by the institution out of band once
+// a token is issued) even to attempt this; what the circuit proves is "I
+// hold data matching the on-chain commitment, I hold a valid token covering
+// this bundle, and that data satisfies the predicate" — without the proof
+// or its result revealing the data itself.
+
+// The recipient's identity secret — same treatment as institutionSecret.
+witness recipientSecret(): Bytes<32>;
+
+export circuit deriveRecipientPubKey(): Bytes<32> {
+  return disclose(persistentHash<Vector<2, Bytes<32>>>([pad(32, "GNUHEALTH_RECIPIENT_ID_V1"), recipientSecret()]));
+}
+
+// Shared precondition for every verify*Bundle circuit below: the token
+// exists, isn't revoked or expired, targets this record, and the caller
+// holds the recipientSecret matching its recipientPubKey. Each caller still
+// has to check its own bundle's grant* flag on the returned record — that
+// part can't be shared since it's a different field per circuit.
+circuit checkTokenValidity(tokenId: Bytes<32>, recordId: Bytes<32>): TokenRecord {
+  const id = disclose(tokenId);
+  assert(tokenRegistry.member(id), "Token does not exist");
+  const token = tokenRegistry.lookup(id);
+
+  assert(!token.revoked, "Token has been revoked");
+  assert(kernel.blockTimeLessThan(disclose(token.expiryTime)), "Token has expired");
+  assert(token.recordId == disclose(recordId), "Token does not grant access to this record");
+
+  const recipientPubKey = deriveRecipientPubKey();
+  assert(recipientPubKey == token.recipientPubKey, "Caller is not this token's recipient");
+
+  return token;
+}
+
+export circuit verifyVaccinationBundle(
+  tokenId: Bytes<32>,
+  recordId: Bytes<32>,
+  requiredVaccineId: Bytes<32>,
+  vaccination: VaccinationData,
+  vaccinationSalt: Bytes<32>,
+): Boolean {
+  const token = checkTokenValidity(tokenId, recordId);
+  assert(token.grantVaccination, "Token does not grant access to the Vaccination bundle");
+
+  const rId = disclose(recordId);
+  assert(recordRegistry.member(rId), "Record does not exist");
+  const record = recordRegistry.lookup(rId);
+  assert(
+    persistentCommit<VaccinationData>(vaccination, vaccinationSalt) == record.vaccinationCommit,
+    "Supplied vaccination data does not match the record's committed bundle"
+  );
+  assert(vaccination.vaccineId == disclose(requiredVaccineId), "Supplied vaccination data is not for the requested vaccine");
+
+  // kernel.blockTimeGreaterThan can only compare a disclosed value — same
+  // constraint Assay's verifyGmpBundle hit with validFrom/validUntil, and
+  // (like there) both operands feeding the kernel check are disclosed
+  // together rather than left partially private. `completed` stays
+  // undisclosed until the single outer disclose() at the return below —
+  // dose and the rest of VaccinationData are never touched at all.
+  const hasNextDose = disclose(vaccination.hasNextDose);
+  const nextDoseDate = disclose(vaccination.nextDoseDate);
+  const notOverdue = !hasNextDose || !kernel.blockTimeGreaterThan(nextDoseDate);
+  return disclose(vaccination.completed && notOverdue);
+}
+
+export circuit verifyLabResultBundle(
+  tokenId: Bytes<32>,
+  recordId: Bytes<32>,
+  requiredTestTypeId: Bytes<32>,
+  labResult: LabResultData,
+  labResultSalt: Bytes<32>,
+): Boolean {
+  const token = checkTokenValidity(tokenId, recordId);
+  assert(token.grantLabResult, "Token does not grant access to the LabResult bundle");
+
+  const rId = disclose(recordId);
+  assert(recordRegistry.member(rId), "Record does not exist");
+  const record = recordRegistry.lookup(rId);
+  assert(
+    persistentCommit<LabResultData>(labResult, labResultSalt) == record.labResultCommit,
+    "Supplied lab result data does not match the record's committed bundle"
+  );
+  assert(labResult.testTypeId == disclose(requiredTestTypeId), "Supplied lab result data is not for the requested test");
+
+  return disclose(labResult.resultValue >= labResult.rangeLow && labResult.resultValue <= labResult.rangeHigh);
+}
+
+export circuit verifyCriticalFlagsBundle(
+  tokenId: Bytes<32>,
+  recordId: Bytes<32>,
+  criticalFlags: CriticalFlagsData,
+  criticalFlagsSalt: Bytes<32>,
+  requestedFlag: Uint<8>,
+): Boolean {
+  const token = checkTokenValidity(tokenId, recordId);
+  assert(token.grantCriticalFlags, "Token does not grant access to the CriticalFlags bundle");
+
+  const rId = disclose(recordId);
+  assert(recordRegistry.member(rId), "Record does not exist");
+  const record = recordRegistry.lookup(rId);
+  assert(
+    persistentCommit<CriticalFlagsData>(criticalFlags, criticalFlagsSalt) == record.criticalFlagsCommit,
+    "Supplied critical-flags data does not match the record's committed bundle"
+  );
+
+  // requestedFlag selects exactly one of the nine flags below to disclose;
+  // the other eight stay fully private. 0=critDbt .. 8=critCognitive. This
+  // is a same-typed runtime branch (all nine fields are Boolean), not the
+  // "no polymorphism in Compact" problem the prior project hit with
+  // differently-typed bundle data — so one selector circuit, not nine.
+  assert(requestedFlag <= 8, "requestedFlag out of range");
+  const flag = disclose(requestedFlag);
+
+  if (flag == 0) {
+    return disclose(criticalFlags.critDbt);
+  } else if (flag == 1) {
+    return disclose(criticalFlags.critCardio);
+  } else if (flag == 2) {
+    return disclose(criticalFlags.critAllergic);
+  } else if (flag == 3) {
+    return disclose(criticalFlags.critCancer);
+  } else if (flag == 4) {
+    return disclose(criticalFlags.critImmuno);
+  } else if (flag == 5) {
+    return disclose(criticalFlags.critMental);
+  } else if (flag == 6) {
+    return disclose(criticalFlags.critNutrition);
+  } else if (flag == 7) {
+    return disclose(criticalFlags.critSocial);
+  } else {
+    return disclose(criticalFlags.critCognitive);
+  }
+}
