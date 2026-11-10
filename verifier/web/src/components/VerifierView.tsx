@@ -7,10 +7,11 @@
 // copy-paste, but the shape is the same: out-of-band, never on-chain).
 
 import { useEffect, useMemo, useState } from 'react';
-import { derivePubKey, verify, type CriticalFlagsBundle, type LabResultBundle, type VaccinationBundle } from '../lib/api.js';
+import { derivePubKey, verify, type CriticalFlagsBundle } from '../lib/api.js';
 import { useVerifierIdentity } from '../lib/identity.js';
 import { bytes32ToLabel, formatUnixSeconds, shortHex } from '../lib/format.js';
 import { hexToBytes } from '../lib/hex.js';
+import { parseBundleJson, type ParsedBundle } from '../lib/bundle.js';
 import { PrivacyInspector, type InspectorRow } from './PrivacyInspector.js';
 
 type Category = 'vaccination' | 'labResult' | 'criticalFlags';
@@ -32,19 +33,6 @@ const CRIT_FLAG_LABELS: { key: keyof CriticalFlagsBundle; index: number; label: 
   { key: 'critSocial', index: 7, label: 'Social' },
   { key: 'critCognitive', index: 8, label: 'Cognitive' },
 ];
-
-interface ParsedBundle {
-  vaccination?: VaccinationBundle;
-  vaccinationSalt?: string;
-  labResult?: LabResultBundle;
-  labResultSalt?: string;
-  criticalFlags?: CriticalFlagsBundle;
-  criticalFlagsSalt?: string;
-}
-
-function parseBundleJson(text: string): ParsedBundle {
-  return JSON.parse(text) as ParsedBundle;
-}
 
 type Outcome = { kind: 'pass'; pass: boolean } | { kind: 'error'; message: string };
 
@@ -184,14 +172,14 @@ export function VerifierView() {
       <p className="hint">
         This identity was generated in your own browser and has never been shared with the hospital's system — only
         its public key below is meant to leave this device, handed to the institution so they can issue a token
-        scoped to it. A real proof runs against the live contract when you verify; nothing pasted here is sent
-        anywhere except the one predicate result.
+        scoped to it. A real proof runs against the live contract when you verify; your secret and the pasted bundle are sent to your trusted verifier server for proof generation.
+        The ledger receives commitments, authorization metadata, the result, and vaccination scheduling fields.
       </p>
 
       <div className="card identity-card">
         <label>
           Your recipient secret
-          <input type="text" value={recipientSecretHex} onChange={(e) => setRecipientSecretHex(e.target.value)} />
+          <input type="password" autoComplete="off" value={recipientSecretHex} onChange={(e) => setRecipientSecretHex(e.target.value)} />
         </label>
         <div className="identity-row">
           <span className="hint">
@@ -255,8 +243,8 @@ export function VerifierView() {
 
         {outcome?.kind === 'pass' && (
           <p className={outcome.pass ? 'success' : 'error'}>
-            That {outcome.pass ? 'PASS' : 'FAIL'} boolean, and only that, is what left the contract. No underlying
-            record data was disclosed.
+            Verification returned {outcome.pass ? 'PASS' : 'FAIL'}. The verifier server received the witness data;
+            vaccination checks also disclose scheduling fields to the ledger.
           </p>
         )}
         {outcome?.kind === 'error' && <p className="error">Could not verify: {outcome.message}</p>}

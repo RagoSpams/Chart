@@ -10,6 +10,12 @@ describe('submitRecordBundle', () => {
     env = deployForTest(institutionA);
   });
 
+  it('rejects an inverted laboratory reference range', () => {
+    const bundle = defaultBundleArgs();
+    bundle.labResult.rangeLow = 50n;
+    expect(() => submit(env, bytes32('BAD-RANGE'), bundle)).toThrow(/reference range/);
+  });
+
   it('registers a new record with withdrawn = false', () => {
     const recordId = bytes32('RECORD-1');
     expect(env.getLedger().recordRegistry.member(recordId)).toBe(false);

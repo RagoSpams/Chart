@@ -13,11 +13,11 @@
 # disclosure-token issuance or verification from Tryton yet — that's a
 # later step once this first real connection is proven.
 
-import hashlib
 import json
+import os
 import urllib.error
 import urllib.request
-from datetime import timezone
+from .encoding import bytes32_hex, unix_seconds, scaled_uint32
 
 from trytond.exceptions import UserError
 from trytond.model import ModelView, fields
@@ -25,34 +25,12 @@ from trytond.pool import Pool
 from trytond.transaction import Transaction
 from trytond.wizard import StateTransition, StateView, Button, Wizard
 
-# The bridge service runs on the WSL2 Ubuntu host, outside this container;
-# trytond runs inside gnuhealth-spike. host.docker.internal was tried first
-# (Docker Desktop's usual container->host route) but resolves to the
-# Windows host's own network stack, not specifically into the WSL2 network
-# namespace where the bridge is actually listening — confirmed empirically
-# (DNS resolved, but connection was refused even with the bridge running).
-# WSL2 Ubuntu's own eth0 address works instead (verified reachable via curl
-# from inside this container before writing this fix). This address is
-# assigned by WSL2 and can change across reboots — fine for this narrow-scope
-# local proof, but worth a config option before this goes further.
-BRIDGE_URL = 'http://192.168.204.19:4000'
-HTTP_TIMEOUT_SECONDS = 120  # first call triggers real wallet sync + deploy
+# Default to loopback. Set CHART_BRIDGE_URL explicitly when Tryton runs in
+# another container/namespace; never hard-code a developer's WSL2 address.
+BRIDGE_URL = os.environ.get('CHART_BRIDGE_URL', 'http://127.0.0.1:4000').rstrip('/')
+HTTP_TIMEOUT_SECONDS = 600  # first call triggers real wallet sync + deploy
 
 
-def bytes32_hex(label):
-    """32-byte hex identifier from an arbitrary real-data string (e.g. a
-    vaccine or lab-analyte name) — SHA-256 already produces exactly 32
-    bytes, so no truncation/padding tricks are needed (unlike the bridge's
-    own bytes32() helper, which left-pads short literal labels)."""
-    return hashlib.sha256(label.encode('utf-8')).hexdigest()
-
-
-def unix_seconds(dt):
-    if dt is None:
-        return 0
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return int(dt.timestamp())
 
 
 class RequestDisclosureResult(ModelView):
@@ -78,6 +56,10 @@ class RequestDisclosure(Wizard):
         ])
 
     def transition_start(self):
+        if os.environ.get('CHART_SYNTHETIC_ONLY') != 'true':
+            raise UserError('Synthetic demo only', 'Set CHART_SYNTHETIC_ONLY=true only on a database containing fictional patients.')
+        if not Transaction().context.get('active_id') or Transaction().context.get('active_model') != 'gnuhealth.patient':
+            raise UserError('Select a patient', 'Run this wizard from a synthetic patient record.')
         pool = Pool()
         Patient = pool.get('gnuhealth.patient')
         patient = Patient(Transaction().context.get('active_id'))
@@ -165,9 +147,9 @@ class RequestDisclosure(Wizard):
                 # prior Assay project used for temperature readings).
                 payload = {
                     'testTypeId': bytes32_hex(analyte.name),
-                    'resultValue': round(analyte.result * 10),
-                    'rangeLow': round(analyte.lower_limit * 10),
-                    'rangeHigh': round(analyte.upper_limit * 10),
+                    'resultValue': scaled_uint32(analyte.result),
+                    'rangeLow': scaled_uint32(analyte.lower_limit),
+                    'rangeHigh': scaled_uint32(analyte.upper_limit),
                     'analysisDate': unix_seconds(lab.date_analysis),
                 }
                 note = (
@@ -208,15 +190,15 @@ class RequestDisclosure(Wizard):
         data = json.dumps(body).encode('utf-8')
         request = urllib.request.Request(
             BRIDGE_URL + path, data=data, method='POST',
-            headers={'Content-Type': 'application/json'})
+            headers={'Content-Type': 'application/json',
+                     'Authorization': 'Bearer ' + os.environ.get('CHART_BRIDGE_API_KEY', '')})
         try:
             with urllib.request.urlopen(request, timeout=HTTP_TIMEOUT_SECONDS) as resp:
                 return json.loads(resp.read().decode('utf-8'))
         except urllib.error.HTTPError as err:
-            detail = err.read().decode('utf-8', errors='replace')
             raise UserError(
                 'Bridge request failed',
-                'POST %s returned HTTP %s:\n%s' % (path, err.code, detail))
+                'POST %s returned HTTP %s' % (path, err.code))
         except urllib.error.URLError as err:
             raise UserError(
                 'Could not reach the bridge service',

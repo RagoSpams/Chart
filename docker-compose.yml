@@ -3,18 +3,10 @@
 # Bring up:   npm run devnet:up    (docker compose up -d --wait)
 # Tear down:  npm run devnet:down  (docker compose down -v)
 #
-# Versions below are NOT hand-picked: they're copied verbatim from a fresh
-# `npx create-mn-app@latest -t hello-world` run on 2026-08-27 (create-mn-app
-# v0.5.0), which produced the exact same pins as the prior Assay project's
-# devnet (verified 2026-08-14) — i.e. nothing has moved upstream since. Don't
-# bump these without re-checking upstream release notes (or re-running
-# create-mn-app to regenerate this file from scratch).
-#
-# Host ports are offset by +1 (9945/8089/6301 instead of the template's
-# 9944/8088/6300): the prior Assay project's own devnet is still running
-# healthily on this machine and holds the default ports — this project's
-# devnet runs alongside it, not in place of it. Container-internal ports
-# (service-to-service traffic on the compose network) are untouched.
+# Compatible local ledger-8 component pins. Change these together with the
+# Compact/runtime/SDK pins and rerun the complete synthetic workflow.
+# Host ports are offset from upstream defaults so this stack can coexist
+# with other local development services. All host bindings are loopback.
 name: gnuhealth-midnight-devnet
 
 services:
@@ -22,7 +14,7 @@ services:
     image: midnightntwrk/midnight-node:1.0.0
     container_name: gnuhealth-midnight-node
     ports:
-      - "9945:9944"
+      - "127.0.0.1:9945:9944"
     environment:
       CFG_PRESET: "dev"
       SIDECHAIN_BLOCK_BENEFICIARY: "04bcf7ad3be7a5c790460be82a713af570f22e0f801f6659ab8e84a52be6969e"
@@ -59,7 +51,7 @@ services:
     # second layer for plain `docker compose up -d` flows without --wait.
     restart: on-failure
     ports:
-      - "8089:8088"
+      - "127.0.0.1:8089:8088"
     environment:
       RUST_LOG: "indexer=info,chain_indexer=info,indexer_api=info,wallet_indexer=info,indexer_common=info,fastrace_opentelemetry=off,info"
       APP__APPLICATION__NETWORK_ID: "undeployed"
@@ -91,9 +83,9 @@ services:
     # Desktop. Avoid 9.0.0-rc.x tags: pre-release.
     image: midnightntwrk/proof-server:8.1.0
     container_name: gnuhealth-midnight-proof-server
-    command: ["midnight-proof-server -v"]
+    command: ["midnight-proof-server"]
     ports:
-      - "6301:6300"
+      - "127.0.0.1:6301:6300"
     environment:
       RUST_BACKTRACE: "full"
     healthcheck:

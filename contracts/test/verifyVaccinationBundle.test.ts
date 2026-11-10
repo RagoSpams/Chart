@@ -110,6 +110,16 @@ describe('verifyVaccinationBundle', () => {
     expect(() => verifyVaccination(env, asRecipient)).toThrow();
   });
 
+  it('rejects verification after the institution withdraws the record', () => {
+    env.context = env.contract.circuits.withdrawRecordBundle(env.context, RECORD_ID).context;
+    expect(() => verifyVaccination(env, otherParty(env, recipient))).toThrow(/withdrawn/);
+  });
+
+  it('rejects a token at its exact expiry boundary', () => {
+    setBlockTime(env, DEFAULT_BLOCK_TIME + 500_000n);
+    expect(() => verifyVaccination(env, otherParty(env, recipient))).toThrow();
+  });
+
   it('fails (throws) on a revoked token', () => {
     const { context } = env.contract.circuits.revokeToken(env.context, TOKEN_ID);
     env.context = context;

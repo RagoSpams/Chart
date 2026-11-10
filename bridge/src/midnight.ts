@@ -1,3 +1,4 @@
+import { instrumentProvider } from './diagnostics.js';
 // Deploys the compiled gnuhealth_disclosure contract to this project's own
 // local Midnight devnet (docker-compose.yml) and exposes typed wrappers
 // around its callable circuits. Real proof generation via the running
@@ -90,7 +91,7 @@ const contractPath = path.join(zkConfigPath, 'contract', 'index.js');
 // it's only valid for this specific local devnet's chain state, and a
 // `docker compose down -v` / fresh devnet invalidates it same as any other
 // on-chain state.
-const deployedContractPath = path.resolve(__dirname, '..', 'deployed-contract.json');
+const deployedContractPath = process.env.CHART_DEPLOYMENT_FILE || path.resolve(__dirname, '..', 'deployed-contract.json');
 
 function readPersistedContractAddress(): string | null {
   try {
@@ -117,7 +118,8 @@ function compileGnuhealthContract(witnesses: Witnesses<PrivateState>) {
 }
 
 async function createProviders(walletCtx: WalletContext): Promise<ContractProviders<ContractInstance>> {
-  const privateStatePassword = 'Local-Devnet-Development-Placeholder-1';
+  const privateStatePassword = process.env.CHART_PRIVATE_STATE_PASSWORD;
+  if (!privateStatePassword || privateStatePassword.length < 32) throw new Error('CHART_PRIVATE_STATE_PASSWORD must contain at least 32 characters');
   const walletProvider = {
     getCoinPublicKey: () => walletCtx.shieldedSecretKeys.coinPublicKey,
     getEncryptionPublicKey: () => walletCtx.shieldedSecretKeys.encryptionPublicKey,
@@ -137,15 +139,16 @@ async function createProviders(walletCtx: WalletContext): Promise<ContractProvid
 
   return {
     privateStateProvider: levelPrivateStateProvider({
+      midnightDbName: process.env.CHART_PRIVATE_STATE_DIR || 'bridge-state',
       privateStateStoreName: 'gnuhealth-midnight-bridge-state',
       accountId,
       privateStoragePasswordProvider: () => privateStatePassword,
     }),
-    publicDataProvider: indexerPublicDataProvider(LOCAL_DEVNET.indexer, LOCAL_DEVNET.indexerWS),
+    publicDataProvider: instrumentProvider(indexerPublicDataProvider(LOCAL_DEVNET.indexer, LOCAL_DEVNET.indexerWS), 'bridge.indexer'),
     zkConfigProvider,
-    proofProvider: httpClientProofProvider(LOCAL_DEVNET.proofServer, zkConfigProvider),
-    walletProvider,
-    midnightProvider: walletProvider,
+    proofProvider: instrumentProvider(httpClientProofProvider(LOCAL_DEVNET.proofServer, zkConfigProvider), 'bridge.proof'),
+    walletProvider: instrumentProvider(walletProvider, 'bridge.wallet'),
+    midnightProvider: instrumentProvider(walletProvider, 'bridge.wallet'),
   } as unknown as ContractProviders<ContractInstance>;
 }
 
@@ -213,7 +216,9 @@ export class GnuhealthDisclosureClient {
     const walletCtx = await fundedWallet();
     const providers = await createProviders(walletCtx);
 
-    const institutionSecret = paddedSecret('BRIDGE-TEST-INSTITUTION-A');
+    const secretHex = process.env.CHART_INSTITUTION_SECRET;
+    if (!secretHex || !/^[a-f0-9]{64}$/i.test(secretHex)) throw new Error('Set CHART_INSTITUTION_SECRET to 32 random bytes encoded as hex');
+    const institutionSecret = new Uint8Array(Buffer.from(secretHex, 'hex'));
     const recipientSecret = paddedSecret('BRIDGE-TEST-RECIPIENT-A');
 
     const compiledForInstitution = compileGnuhealthContract(institutionWitnesses(institutionSecret));
@@ -303,6 +308,14 @@ export class GnuhealthDisclosureClient {
       args.recipientPubKey,
     );
     return tx;
+  }
+
+  async revokeToken(tokenId: Uint8Array): Promise<FinalizedTxData> {
+    return (await this.asInstitution.callTx.revokeToken(tokenId)).public;
+  }
+
+  async withdrawRecordBundle(recordId: Uint8Array): Promise<FinalizedTxData> {
+    return (await this.asInstitution.callTx.withdrawRecordBundle(recordId)).public;
   }
 
   async verifyVaccinationBundle(args: {

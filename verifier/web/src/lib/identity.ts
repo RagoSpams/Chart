@@ -15,7 +15,14 @@ const STORAGE_KEY = 'gnuhealth-midnight:verifier:identity';
 
 function loadOrCreateSecret(): Uint8Array {
   const stored = localStorage.getItem(STORAGE_KEY);
-  if (stored) return hexToBytes(stored);
+  if (stored) {
+    try {
+      const bytes = hexToBytes(stored);
+      if (bytes.length === 32) return bytes;
+    } catch {
+      // Recover from corrupt or manually edited demo storage.
+    }
+  }
   const fresh = randomBytes32();
   localStorage.setItem(STORAGE_KEY, bytesToHex(fresh));
   return fresh;
@@ -27,7 +34,9 @@ export function useVerifierIdentity(): { secret: Uint8Array; regenerate: () => v
 
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEY && e.newValue) setSecret(hexToBytes(e.newValue));
+      if (e.key === STORAGE_KEY && e.newValue) {
+        try { const bytes = hexToBytes(e.newValue); if (bytes.length === 32) setSecret(bytes); } catch { /* Ignore malformed external storage updates. */ }
+      }
     };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
