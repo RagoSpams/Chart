@@ -1,3 +1,4 @@
+import { instrumentProvider } from './diagnostics.js';
 // Real Midnight SDK calls for the verifier — completely separate process
 // and identity from bridge/src/midnight.ts, though necessarily similar in
 // shape (same SDK, same kind of real proof-generation work). Two tiers,
@@ -76,14 +77,15 @@ function getWallet(): Promise<WalletContext> {
     walletPromise = createWallet({ networkConfig: LOCAL_DEVNET, seed: GENESIS_SEED }).then(async (walletCtx) => {
       await walletCtx.wallet.waitForSyncedState();
       return walletCtx;
-    });
+    }).catch(err => { walletPromise = null; throw err; });
   }
   return walletPromise;
 }
 
 async function getProviders(): Promise<ContractProviders<ContractInstance>> {
   const walletCtx = await getWallet();
-  const privateStatePassword = 'Local-Devnet-Development-Placeholder-1';
+  const privateStatePassword = process.env.CHART_PRIVATE_STATE_PASSWORD;
+  if (!privateStatePassword || privateStatePassword.length < 32) throw new Error('CHART_PRIVATE_STATE_PASSWORD must contain at least 32 characters');
   const walletProvider = {
     getCoinPublicKey: () => walletCtx.shieldedSecretKeys.coinPublicKey,
     getEncryptionPublicKey: () => walletCtx.shieldedSecretKeys.encryptionPublicKey,
@@ -103,15 +105,16 @@ async function getProviders(): Promise<ContractProviders<ContractInstance>> {
 
   return {
     privateStateProvider: levelPrivateStateProvider({
+      midnightDbName: process.env.CHART_PRIVATE_STATE_DIR || 'verifier-state',
       privateStateStoreName: 'gnuhealth-midnight-verifier-state',
       accountId,
       privateStoragePasswordProvider: () => privateStatePassword,
     }),
-    publicDataProvider: indexerPublicDataProvider(LOCAL_DEVNET.indexer, LOCAL_DEVNET.indexerWS),
+    publicDataProvider: instrumentProvider(indexerPublicDataProvider(LOCAL_DEVNET.indexer, LOCAL_DEVNET.indexerWS), 'verifier.indexer'),
     zkConfigProvider,
-    proofProvider: httpClientProofProvider(LOCAL_DEVNET.proofServer, zkConfigProvider),
-    walletProvider,
-    midnightProvider: walletProvider,
+    proofProvider: instrumentProvider(httpClientProofProvider(LOCAL_DEVNET.proofServer, zkConfigProvider), 'verifier.proof'),
+    walletProvider: instrumentProvider(walletProvider, 'verifier.wallet'),
+    midnightProvider: instrumentProvider(walletProvider, 'verifier.wallet'),
   } as unknown as ContractProviders<ContractInstance>;
 }
 
@@ -139,7 +142,7 @@ async function joinAsRecipient(contractAddress: string, recipientSecret: Uint8Ar
   // different verifier hitting this same local devnet), and reusing one ID
   // across different secrets is exactly the collision bridge/ hit and fixed
   // in Prompt 3.5 ("No private state found") — scoping avoids it here too.
-  const privateStateId = `verifier-${Buffer.from(recipientSecret).toString('hex')}`;
+  const privateStateId = `verifier-${Buffer.from(deriveRecipientPubKeyLocally(recipientSecret)).toString('hex')}`;
   return findDeployedContract(providers, {
     compiledContract: compiled,
     contractAddress,

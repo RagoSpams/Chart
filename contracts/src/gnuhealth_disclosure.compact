@@ -116,6 +116,7 @@ export circuit submitRecordBundle(
   criticalFlagsSalt: Bytes<32>,
 ): [] {
   const institutionId = deriveInstitutionId();
+  assert(labResult.rangeLow <= labResult.rangeHigh, "Invalid laboratory reference range");
 
   const vaccinationCommit = persistentCommit<VaccinationData>(vaccination, vaccinationSalt);
   const labResultCommit = persistentCommit<LabResultData>(labResult, labResultSalt);
@@ -281,6 +282,9 @@ circuit checkTokenValidity(tokenId: Bytes<32>, recordId: Bytes<32>): TokenRecord
   assert(!token.revoked, "Token has been revoked");
   assert(kernel.blockTimeLessThan(disclose(token.expiryTime)), "Token has expired");
   assert(token.recordId == disclose(recordId), "Token does not grant access to this record");
+  assert(recordRegistry.member(token.recordId), "Record does not exist");
+  const sourceRecord = recordRegistry.lookup(token.recordId);
+  assert(!sourceRecord.withdrawn, "Record has been withdrawn");
 
   const recipientPubKey = deriveRecipientPubKey();
   assert(recipientPubKey == token.recipientPubKey, "Caller is not this token's recipient");
@@ -338,7 +342,8 @@ export circuit verifyLabResultBundle(
   );
   assert(labResult.testTypeId == disclose(requiredTestTypeId), "Supplied lab result data is not for the requested test");
 
-  return disclose(labResult.resultValue >= labResult.rangeLow && labResult.resultValue <= labResult.rangeHigh);
+  // A missing-result placeholder (analysisDate == 0) must never pass.
+  return disclose(labResult.analysisDate > 0 && labResult.resultValue >= labResult.rangeLow && labResult.resultValue <= labResult.rangeHigh);
 }
 
 export circuit verifyCriticalFlagsBundle(

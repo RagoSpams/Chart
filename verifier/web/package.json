@@ -3,11 +3,12 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Standalone verifier UI — what an outside regulator/researcher uses to check a disclosure token against the real deployed gnuhealth_disclosure contract. Talks only to verifier-server (never to Tryton, never to bridge/); mirrors the prior Assay project's VerifierView/ConsumerView/PrivacyInspector pattern.",
+  "description": "Standalone verifier UI \u2014 what an outside regulator/researcher uses to check a disclosure token against the real deployed gnuhealth_disclosure contract. Talks only to verifier-server (never to Tryton, never to bridge/); mirrors the prior Assay project's VerifierView/ConsumerView/PrivacyInspector pattern.",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "clean": "node ../../scripts/clean.mjs web"
   },
   "dependencies": {
     "react": "^19.2.8",

@@ -51,7 +51,7 @@ function PublicBox({ items }: { items: InspectorRow[] }) {
 }
 
 export function PrivacyInspector({
-  privateTitle = 'Private (never leaves this browser)',
+  privateTitle = 'Witness (shared with trusted verifier server)',
   publicTitle = 'Public (what a real indexer shows anyone)',
   privateItems,
   publicItems,

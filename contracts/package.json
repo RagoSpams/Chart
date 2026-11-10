@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Compact contract — patient record registry, scoped disclosure tokens, and vaccination/lab-result/critical-flags verification circuits.",
+  "description": "Compact contract \u00e2\u20ac\u201d patient record registry, scoped disclosure tokens, and vaccination/lab-result/critical-flags verification circuits.",
   "main": "./managed/gnuhealth_disclosure/contract/index.js",
   "types": "./managed/gnuhealth_disclosure/contract/index.d.ts",
   "exports": {
@@ -13,9 +13,9 @@
     }
   },
   "scripts": {
-    "compile": "compact compile src/gnuhealth_disclosure.compact managed/gnuhealth_disclosure",
+    "compile": "node ../scripts/compile-contracts.mjs",
     "test": "npm run compile && vitest run",
-    "clean": "rm -rf managed"
+    "clean": "node ../scripts/clean.mjs contracts"
   },
   "dependencies": {
     "@midnight-ntwrk/compact-runtime": "0.16.0"

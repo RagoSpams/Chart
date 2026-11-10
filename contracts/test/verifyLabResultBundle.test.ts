@@ -93,6 +93,27 @@ describe('verifyLabResultBundle', () => {
     expect(() => verifyLabResult(env, asRecipient)).toThrow();
   });
 
+  it('rejects previously issued tokens after the source record is withdrawn', () => {
+    const { context } = env.contract.circuits.withdrawRecordBundle(env.context, RECORD_ID);
+    env.context = context;
+    const asRecipient = otherParty(env, recipient);
+    expect(() => verifyLabResult(env, asRecipient)).toThrow();
+  });
+
+  it('rejects a token at its exact expiry boundary', () => {
+    setBlockTime(env, DEFAULT_BLOCK_TIME + 500_000n);
+    expect(() => verifyLabResult(env, otherParty(env, recipient))).toThrow();
+  });
+
+  it('returns false for a missing laboratory observation placeholder', () => {
+    const recordId = bytes32('NO-LAB');
+    const bundle = { ...defaultBundleArgs(), labResult: labResultData({ resultValue: 0n, rangeLow: 0n, rangeHigh: 0n, analysisDate: 0n }) };
+    submitRecordBundle(env, recordId, bundle);
+    const tokenId = bytes32('NO-LAB-TOKEN');
+    issueDisclosureToken(env, { tokenId, recordId, recipientPubKey: insurerPubKey });
+    expect(verifyLabResult(env, otherParty(env, recipient), { recordId, tokenId, labResult: bundle.labResult })).toBe(false);
+  });
+
   it('fails (throws) on a revoked token', () => {
     const { context } = env.contract.circuits.revokeToken(env.context, TOKEN_ID);
     env.context = context;

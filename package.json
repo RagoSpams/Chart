@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "GNU Health x Midnight — scoped, revocable disclosure of health-record predicates without exposing the underlying record. Hackathon project for the \"Integrate Midnight\" track.",
+  "description": "GNU Health x Midnight: scoped, revocable disclosure of health-record predicates without exposing the underlying record on chain.",
   "license": "MIT",
   "workspaces": [
     "contracts",
@@ -13,21 +13,29 @@
   ],
   "scripts": {
     "compile": "npm run compile -w contracts",
+    "test": "npm run test:unit && npm run test:python && npm run test:contracts && npm run typecheck && npm run build",
+    "test:unit": "node --import tsx --test bridge/test/*.test.mjs verifier/server/test/*.test.mjs verifier/web/test/*.test.mjs scripts/test/*.test.mjs",
     "build": "npm run build --workspaces --if-present",
-    "dev:bridge": "npm run dev -w bridge",
-    "dev:verifier-server": "npm run dev -w verifier/server",
+    "dev:bridge": "node --env-file=.env --import tsx --watch bridge/src/index.ts",
+    "dev:verifier-server": "node --env-file=.env --import tsx --watch verifier/server/src/index.ts",
     "dev:verifier-web": "npm run dev -w verifier/web",
     "devnet:up": "docker compose up -d --wait",
     "devnet:down": "docker compose down",
     "devnet:logs": "docker compose logs -f",
-    "clean": "npm run clean --workspaces --if-present && rm -rf node_modules"
+    "clean": "node scripts/clean.mjs",
+    "test:python": "python -m unittest discover -s tryton_modules/tests -v",
+    "typecheck": "tsc --noEmit -p contracts/tsconfig.json",
+    "test:contracts": "npm run test -w contracts",
+    "test:e2e": "node scripts/devnet-e2e.mjs",
+    "setup:gnuhealth": "node scripts/setup-gnuhealth.mjs",
+    "check:release": "node scripts/check-sensitive-files.mjs && node scripts/check-release-content.mjs"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.12.0"
   },
   "devDependencies": {
-    "typescript": "^6.0.3",
-    "tsx": "^4.23.12"
+    "tsx": "^4.23.12",
+    "typescript": "^6.0.3"
   },
   "allowScripts": {
     "classic-level@3.0.0": true,
@@ -35,6 +43,10 @@
     "esbuild@0.28.2": true
   },
   "overrides": {
-    "@midnight-ntwrk/onchain-runtime-v3": "3.1.0"
+    "@midnight-ntwrk/onchain-runtime-v3": "3.0.0"
+  },
+  "dependencies": {
+    "@midnight-ntwrk/onchain-runtime-v3": "3.0.0",
+    "@midnight-ntwrk/midnight-js-utils": "4.1.1"
   }
 }

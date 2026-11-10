@@ -1,0 +1,16 @@
+# Explicitly opt in: this database is empty and dedicated to synthetic tests.
+services:
+  synthetic-db:
+    image: postgres:16.10
+    profiles: ["integration"]
+    ports:
+      - "127.0.0.1:55432:5432"
+    environment:
+      POSTGRES_DB: chart_synthetic
+      POSTGRES_USER: chart_synthetic
+      POSTGRES_PASSWORD: ${CHART_TEST_DATABASE_PASSWORD:?Generate a local synthetic-test database password}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chart_synthetic -d chart_synthetic"]
+      interval: 2s
+      timeout: 5s
+      retries: 30

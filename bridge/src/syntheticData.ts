@@ -1,7 +1,8 @@
-// Synthetic record-bundle data, constructed entirely in this bridge service
-// for the isolated bridge-to-Midnight integration proof. Deliberately NOT
-// pulled from a real GNU Health instance — Tryton integration is a separate,
-// later step. Field shapes match contracts/src/gnuhealth_disclosure.compact
+import { webcrypto as crypto } from 'node:crypto';
+
+// Synthetic record-bundle defaults used by the bridge. The Tryton wizard can
+// also submit extracted GNU Health values as explicit overrides. Only use
+// synthetic patients in a public demonstration. Field shapes match contracts/src/gnuhealth_disclosure.compact
 // exactly (same as contracts/test/fixtures.ts, kept independent since the
 // bridge doesn't depend on the test-only contracts workspace).
 
@@ -41,9 +42,7 @@ export function bytes32(label: string): Uint8Array {
 }
 
 export function randomBytes32(): Uint8Array {
-  const out = new Uint8Array(32);
-  for (let i = 0; i < out.length; i++) out[i] = Math.floor(Math.random() * 256);
-  return out;
+  return new Uint8Array(crypto.getRandomValues(new Uint8Array(32)));
 }
 
 export function toHex(bytes: Uint8Array): string {
@@ -51,7 +50,11 @@ export function toHex(bytes: Uint8Array): string {
 }
 
 export function fromHex(hex: string): Uint8Array {
-  return new Uint8Array(Buffer.from(hex, 'hex'));
+  const normalized = hex.replace(/^0x/i, '');
+  if (!/^[0-9a-fA-F]{64}$/.test(normalized)) {
+    throw new Error('Expected exactly 32 bytes encoded as hexadecimal');
+  }
+  return new Uint8Array(Buffer.from(normalized, 'hex'));
 }
 
 const nowSeconds = () => BigInt(Math.floor(Date.now() / 1000));
@@ -123,9 +126,9 @@ export function syntheticRecordBundle(overrides: Partial<RecordBundle> = {}): Re
 const recordBundles = new Map<string, RecordBundle>();
 
 export function rememberRecordBundle(recordIdHex: string, bundle: RecordBundle): void {
-  recordBundles.set(recordIdHex, bundle);
+  recordBundles.set(recordIdHex.replace(/^0x/i, '').toLowerCase(), bundle);
 }
 
 export function getRecordBundle(recordIdHex: string): RecordBundle | undefined {
-  return recordBundles.get(recordIdHex);
+  return recordBundles.get(recordIdHex.replace(/^0x/i, '').toLowerCase());
 }
