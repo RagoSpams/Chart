@@ -1,29 +1,102 @@
 # Chart
 
-Chart is an experimental, synthetic-data-only GNU Health → authenticated bridge → Midnight contract → independent verifier integration. It commits salted record bundles and verifies recipient-scoped vaccination, laboratory-range and critical-flag predicates. Tokens expire and can be revoked; withdrawal invalidates previously issued tokens.
+Chart is an open-source experiment in checking narrow facts about synthetic health records with GNU Health, Midnight, and zero-knowledge proofs. I want to explore what a recipient needs to learn to make a decision, and what can stay private.
 
-**Use fictional patients only.** This is a local research demonstration, not clinical software. Read [VALIDATION_REPORT.md](VALIDATION_REPORT.md) for executed checks, known dependency advisories and integration limits. [AUDIT_REPORT.md](AUDIT_REPORT.md) records the earlier review; the validation report supersedes its testing status.
+[Quick start](#quick-start) · [Architecture](docs/ARCHITECTURE.md) · [Developer guide](docs/DEVELOPMENT.md) · [Demo walkthrough](docs/DEMO.md) · [Security](SECURITY.md)
 
-## Tested toolchain
+> [!WARNING]
+> **Research prototype — synthetic data only.** Chart is a local technical demonstration, **not clinical software** or a production consent/identity system. Use fictional records and the local devnet only. Never use real patient data, clinical credentials, or wallets holding public-network funds. See [security boundaries](#what-chart-does-not-guarantee).
 
-| Component | Version / requirement |
+## The Inspiration Behind Chart
+
+As technology becomes more integrated into our everyday lives, privacy has become increasingly important. We're constantly sharing personal information with applications, institutions, and services, often without knowing exactly how much of that information is being accessed.
+
+I think healthcare is one of the fields where privacy should be an absolute priority. Medical records contain some of our most sensitive personal information, and patients should have as much control as possible over who can access it and why.
+
+While healthcare systems have made significant progress in protecting patient data, there are still situations where information is shared beyond what's strictly necessary.
+
+For example, imagine a researcher screening patients for a clinical trial. They might only need to confirm whether a patient's blood test result falls within a particular range. Even with existing systems that restrict access to specific records, the researcher may still receive the actual laboratory result when all they really need is a yes-or-no answer.
+
+That got me thinking: **What if we could verify something about a patient's medical information without revealing the information itself?**
+
+This idea first took shape during a hackathon, where I began exploring how zero-knowledge proofs could be applied to healthcare data verification.
+
+The hackathon was the starting point, but I wanted to take the idea further than an initial prototype. I kept working on Chart's GNU Health integration, independent Midnight verification workflow, and scoped, revocable tokens, with a focus on making the project reproducible, testing its failure cases, and documenting its security boundaries.
+
+The current version has **86 automated checks** and an end-to-end verification workflow tested using synthetic healthcare records. That is evidence for the local demonstration, not a claim that it is ready for clinical use.
+
+Chart is still an experimental project, but the goal is simple: **explore how we can verify sensitive medical information while revealing as little of it as possible.**
+
+## From the hackathon prototype to this release
+
+The [first tracked prototype](https://github.com/RagoSpams/Chart/tree/bb73dc4c81f150d412084cf1ddfda5695b843fd3) already contained a GNU Health wizard, bridge, Compact contract, separate verifier, and scoped, expiring, revocable tokens. The comparison below uses that repository history as its baseline.
+
+The changes leading to the validated release are more concrete:
+
+| Area | What changed |
 | --- | --- |
-| Node.js / npm | Tested with 24.16.0 / 11.13.0; Node >=22.12 required |
-| Python | 3.12.10 for GNU Health and encoding tests |
-| Compact CLI / compiler | CLI 0.5.1; **compiler 0.31.1**, language 0.23.0 |
-| Compact / on-chain runtime | 0.16.0 / **3.0.0**, one shared WASM instance |
-| Midnight JS / wallet SDK | 4.1.1 / 1.2.0 |
-| Local devnet | node 1.0.0, indexer 4.3.3, proof server 8.1.0 |
-| GNU Health / lab / Tryton | 5.0.5 / 5.0.0 / 7.0.61 |
-| PostgreSQL | 16.10, dedicated synthetic-only container |
+| Authorization | Bearer authentication for the local institution bridge, required recipient public keys, and stricter validation before wallet initialization |
+| Contract correctness | Previously issued tokens stop working after record withdrawal; missing lab observations cannot pass; inverted lab ranges are rejected |
+| Security tests | Coverage for expiration boundaries, revocation, wrong recipients, malformed inputs, unauthorized API access, and withdrawal across claim categories |
+| Reproducibility | Compatible shared WASM/runtime pins, a Windows/WSL compiler wrapper, isolated GNU Health setup, and a tested synthetic end-to-end runner |
+| Developer experience | Setup scripts, CI configuration, startup checks, and an actual clean-checkout validation process |
+| Honest privacy claims | Clear documentation of the trusted verifier/proof server, witness handoff, public metadata, remaining dependency advisory, and unresolved historical timeout |
 
-Keep the lockfiles and compiler pin together. The public networks may use a newer stack; this repository targets its **local ledger-8 devnet**, not a public-network deployment. See the official [Compact installation](https://docs.midnight.network/getting-started/installation), [Windows/WSL setup](https://docs.midnight.network/guides/windows-compact-setup), and [compatible 0.31.1 SDK example](https://docs.midnight.network/guides/deploy-and-operate). The root runtime pin prevents two WASM `StateValue` classes from breaking real transactions.
+The architecture began at the hackathon. This release makes that implementation easier to run, examine, and improve. The [release inventory](RELEASE_PREPARATION.md) and [validation report](VALIDATION_REPORT.md) record the changes and the checks behind the current claims.
 
-## Install and test
+## What Chart demonstrates
 
-Start Docker Desktop with the Linux engine. On Windows, install Ubuntu in WSL and install Compact **inside Ubuntu**. Windows System32/compact.exe is an unrelated compression utility.
+An institution records a salted commitment to a **synthetic** health-record bundle and issues a verification token scoped to a particular recipient, claim type, and expiration time. The recipient uses a trusted local verifier service to generate a proof and submit a transaction; the Midnight node checks it against the committed data and token rules.
 
-Run these compiler-install commands in Linux/macOS or an Ubuntu WSL shell (the installer is from the pinned official release):
+| Capability | Demonstrated behavior |
+| --- | --- |
+| **Narrow claims** | Vaccination, laboratory-range, and critical-flag predicates |
+| **Recipient binding** | A token is intended for a specific verifier public key |
+| **Limited permissions** | Tokens authorize only selected claim categories |
+| **Expiry & revocation** | An expired or revoked token cannot authorize verification |
+| **Record withdrawal** | Withdrawing the underlying record invalidates previously issued tokens |
+| **Independent checking** | A separate verifier process reads shared ledger state and submits verification transactions |
+| **Actual integration** | GNU Health/Tryton → authenticated bridge → local Midnight contract → verifier, with synthetic data |
+
+### A simple example
+
+**Private input (synthetic data):** a recorded lab measurement and its allowed range.
+
+**Question:** does the committed measurement satisfy the authorized range predicate?
+
+**Verifier result:** a proof-backed true/false outcome. The value is not a public ledger input, but the current handoff gives it to the trusted verifier server, and the proof server receives proving material. This demo does not keep the measurement secret from a recipient who operates that verifier.
+
+The current lab circuit compares the observation with the range committed by the institution; it is not a complete clinical-trial eligibility engine.
+
+The exact information revealed depends on the circuit and public inputs. For example, the vaccination proof also exposes scheduling fields; repeated queries may reveal information over time. Chart does **not** promise that the verifier learns *only* one bit in every workflow.
+
+## How Chart works
+
+```mermaid
+flowchart LR
+    H["GNU Health / Tryton<br/>fictional patient records"] --> B["Institution bridge<br/>raw bundle + salts"]
+    B -->|"commit, issue, revoke, withdraw"| M["Local Midnight devnet<br/>node + public indexer"]
+    B -. "trusted bundle handoff" .-> U["Verifier UI"]
+    U -->|"selected witness + recipient secret"| V["Trusted verifier server"]
+    V -->|"verification transaction"| M
+    B <-->|"proving material / proof"| P["Trusted local proof server"]
+    V <-->|"proving material / proof"| P
+    M -->|"public state + transaction status"| V
+```
+
+1. **Prepare a synthetic record.** The GNU Health integration supplies structured health information through a Tryton wizard, or the bridge creates synthetic demo data.
+2. **Commit the bundle.** The bridge supplies private inputs to the contract circuit through the local proof service; the ledger stores commitments and disclosed record metadata.
+3. **Issue a scoped token.** The institution selects a verifier public key, claim categories, and expiration.
+4. **Generate and validate a proof.** The trusted verifier server uses the selected witness and recipient secret with the local proof server, submits a verification transaction, and waits for node finalization and indexer observation. An authorized claim can return true or false; that differs from an authorization rejection.
+5. **Enforce changes.** Revocation, expiry, recipient mismatch, and record withdrawal are explicitly checked.
+
+For the exact flow, responsibilities, and exposed metadata, see [Architecture & trust boundaries](docs/ARCHITECTURE.md).
+
+## Quick start
+
+**Prerequisites:** Node.js **22.12+** (24 tested), npm, Python **3.12** for tests and the optional GNU Health integration, Docker Desktop or Docker Compose, and the **pinned Midnight Compact toolchain**. On Windows, install Compact in **Ubuntu WSL**, not through Windows' unrelated `compact.exe` command.
+
+Install Compact CLI **0.5.1** and compiler **0.31.1** in Linux/macOS/Ubuntu WSL (see the [official installation guide](https://docs.midnight.network/getting-started/installation) before running the installer):
 
 ```sh
 curl --proto '=https' --tlsv1.2 -LsSf https://github.com/midnightntwrk/compact/releases/download/compact-v0.5.1/compact-installer.sh -o /tmp/compact-installer.sh
@@ -33,134 +106,76 @@ compact update 0.31.1
 compact compile +0.31.1 --version
 ```
 
-From the repository root, in PowerShell or your regular development shell:
+Make sure `python` resolves to Python 3.12; the [developer guide](docs/DEVELOPMENT.md#python-command) covers POSIX shells without that alias. From the repo root, run:
 
 ```sh
 npm ci --ignore-scripts
 npm test
-node scripts/check-sensitive-files.mjs
-# In a real Git checkout, also audit the proposed tracked release files:
-npm run check:release
 ```
 
-`npm test` runs Node HTTP/security/browser-input tests, Python encoding tests, full Compact compilation and circuit tests, contract-test TypeScript checks, and every workspace build. It needs no devnet. Compilation generates proof keys under `contracts/managed/` and can take several minutes. The compiler script automatically uses Ubuntu WSL on Windows; set `CHART_WSL_DISTRO` if your distribution has a different name. Keep Node dependencies installed by the operating system that runs Node; do not share native node_modules between Windows and WSL.
+`npm test` runs Node/API/browser-input tests, Python encoding tests, Compact compilation and circuit tests, TypeScript checks, and all workspace builds. **It does not start the real devnet or run the persisted GNU Health fixture.**
 
-The tested install uses `--ignore-scripts`: bundled native prebuilds worked on this Windows x64 machine. Other platforms may require `npm rebuild classic-level msgpackr-extract esbuild`; review that dependency code before allowing install scripts. CI is configured to compile and test on Ubuntu; the updated GitHub workflow must still be observed on your own remote repository.
-
-Individual checks:
-
-```sh
-npm run test:unit
-npm run test:python
-npm run compile
-npm run test:contracts
-npm run typecheck
-npm run build
-python -m compileall -q tryton_modules
-npm audit
-```
-
-The filename guard uses Git-tracked paths in a clone, or source paths in a ZIP checkout; it is **not a content/secret scanner**. This repository preserves the history of [RagoSpams/Chart](https://github.com/RagoSpams/Chart). Before any publication, stage the intended source changes, run `npm run check:release`, and review `git diff --cached --name-status`. The guard deliberately fails without a Git index; generated outputs, local credentials and private state must remain untracked. See the current release evidence in the validation report.
-
-## Run the real Midnight integration
+For an actual local Midnight proof/transaction workflow, start Docker and run:
 
 ```sh
 npm run devnet:up
 npm run test:e2e
 ```
 
-This starts separate bridge and verifier processes on loopback ports 14000/14200, generates ephemeral random credentials, deploys a fresh real contract, submits synthetic bundles, and generates/finalizes actual proofs for all three categories. It also checks recipient mismatch, expiration, revocation, record withdrawal and an independent indexer read. It has a 20-minute overall deadline and 10-minute HTTP deadlines, exits nonzero on failure, and stops its Node processes. Docker services remain running. Results and local private state are written only under ignored `.validation/e2e-*/` directories. A timeout is a failed integration run, never a skipped success.
+To include a persisted synthetic patient in **real GNU Health/Tryton**, or to launch the local browser UI, follow the tested commands in the [Developer guide](docs/DEVELOPMENT.md). The end-to-end runner uses fresh synthetic state, explicit authorization failure checks, and a bounded timeout; it is not a mocked proof-success path.
 
-Ports 9945, 8089 and 6301 are bound to 127.0.0.1. Proof-server verbose mode is disabled because it can log proof preimages. `/health` only proves HTTP reachability; the first transaction also initializes/synchronizes a funded local genesis wallet. The genesis seed is public local-devnet test material and must never fund a public-network wallet.
+## Explore the browser demo
 
-## Include a real GNU Health database and wizard
-
-The GNU Health fixture uses the actual ORM and registered wizard with persisted **fictional** patient, clinician, vaccination and validated lab records. It runs as Tryton's setup administrator in a separate `chart_synthetic` database. It does not reuse any existing GNU Health installation or database. The helper refuses database URIs outside 127.0.0.1:55432 with user `chart_synthetic`.
-
-In PowerShell, from the repository root:
-
-```powershell
-python -m venv .validation/python
-.validation/python/Scripts/python.exe -m pip install --upgrade pip==26.3
-.validation/python/Scripts/python.exe -m pip install -r requirements-integration.lock.txt
-$env:CHART_GNUHEALTH_PYTHON = (Resolve-Path .validation/python/Scripts/python.exe).Path
-npm run setup:gnuhealth
-npm run devnet:up
-.validation/python/Scripts/python.exe scripts/test-gnuhealth.py
-npm run test:e2e
-```
-
-On Linux/macOS, use Python 3.12 and:
-
-```sh
-python3.12 -m venv .validation/python
-.validation/python/bin/python -m pip install --upgrade pip==26.3
-.validation/python/bin/python -m pip install -r requirements-integration.lock.txt
-export CHART_GNUHEALTH_PYTHON="$PWD/.validation/python/bin/python"
-npm run setup:gnuhealth
-npm run devnet:up
-.validation/python/bin/python scripts/test-gnuhealth.py
-npm run test:e2e
-```
-
-Building `psycopg2` on Linux may need the distribution's PostgreSQL development headers, C compiler and Python headers. `requirements-integration.lock.txt` records the tested Python package set; Linux/macOS installation has not been exercised here. Use the smaller `requirements-integration.txt` only when intentionally resolving a new environment, then revalidate and refresh the lock.
-
-`setup:gnuhealth` creates generated database/admin passwords and a local Tryton configuration under `.validation/`, starts PostgreSQL through `docker-compose.integration.yml`, initializes Tryton, seeds an explicitly fictional patient/clinician/vaccination/lab fixture, and activates `health_midnight_disclosure`, `health` and `health_lab`. Repeat it to update this test database. Do not copy the generated config into a clinical environment. Keep `.validation/` private and untracked.
-
-The four `test-gnuhealth.py` checks use the actual Tryton database, wizard session and result view with a stub HTTP response; they separately verify synthetic-mode enforcement, selected-patient context and denial of a user without health groups.
-
-The integration helper reads back persisted model values in a new transaction, runs the wizard, checks that the x10-scaled lab result is **107** (not the bridge's synthetic default), then hands the exact bundle to the independent verifier. Missing laboratory observations use analysisDate=0 and cannot produce a passing laboratory proof. Date fields are converted as UTC; measurements use decimal x10 scaling and reject negative, non-finite or overflowing values. Units, clinical correctness and provenance remain outside this demonstration.
-
-## Use the local browser demo
-
-Generate local credentials once (the script refuses to overwrite an existing identity):
+Generate credentials in your local checkout:
 
 ```sh
 node scripts/create-local-env.mjs
 ```
 
-In three separate terminals at the repository root:
+Start these in **three separate terminals**:
 
 ```sh
-npm run dev:bridge
-npm run dev:verifier-server
+node --env-file=.env --import tsx bridge/src/index.ts
+node --env-file=.env --import tsx verifier/server/src/index.ts
 npm run dev:verifier-web
 ```
 
-The Node services load `.env`. Open [the verifier UI](http://127.0.0.1:5174). Bridge: 127.0.0.1:4000; verifier API: 127.0.0.1:4200. Preserve your institution secret and private-state password across service restarts. The bridge's deployed address is local, ignored metadata; after replacing/resetting its chain, remove `bridge/deployed-contract.json` and use fresh private-state directories before deploying again.
+Open [the local verifier UI](http://127.0.0.1:5174). The bridge listens on `127.0.0.1:4000` and verifier API on `127.0.0.1:4200`. The interface derives a verifier public key but displays a shortened version. There is no institution-facing UI: the [demo walkthrough](docs/DEMO.md#prepare-a-browser-handoff) supplies a concrete authenticated API handoff, including a full public key and matching demo identity. **Do not paste the bridge API key into the browser.** For the step-by-step flow, see [Demo walkthrough](docs/DEMO.md).
 
-The UI derives an independent recipient public key. Share that **public key** with the institution, submit a fictional bundle, issue a token to that recipient, and paste the returned bundle/contract/record/token values into the UI. All non-health bridge endpoints require `Authorization: Bearer <CHART_BRIDGE_API_KEY>`; do not put that key in the browser UI. GNU Health's Tryton process also needs `CHART_BRIDGE_API_KEY`, `CHART_BRIDGE_URL` and `CHART_SYNTHETIC_ONLY=true`. The wizard refuses to run without the synthetic-only acknowledgement or outside a selected patient record.
+## Repository map
 
-Bridge endpoints:
-
-| Method / path | Input / behavior |
+| Path | Responsibility |
 | --- | --- |
-| GET /health | Public liveness only |
-| POST /record-bundle | Optional recordId and vaccination/labResult/criticalFlags overrides; fictional defaults for omitted fields; returns full bundle and salts |
-| POST /disclosure-token | Required recordId and recipientPubKey; optional tokenId, expiryTime (Unix seconds), grantVaccination/grantLabResult/grantCriticalFlags (default true) |
-| POST /revoke-token | Required tokenId; institution-authorized contract transaction |
-| POST /withdraw-record | Required recordId; institution-authorized contract transaction |
-| POST /verify | Bridge-only demo recipient; prefer the independent verifier for externally issued tokens |
-| GET /record-bundle/:recordId | Authenticated; additionally disabled unless CHART_ALLOW_RAW_BUNDLE_EXPORT=true |
+| `contracts/` | Compact circuits, contract state, and contract tests |
+| `bridge/` | Institution-side HTTP API, Midnight integration, commitments and token issuance |
+| `verifier/server/` | Local verifier service, recipient/proof checks and chain reads |
+| `verifier/web/` | React/Vite verification UI |
+| `tryton_modules/` | GNU Health/Tryton wizard and Python integration tests |
+| `scripts/` | Local credentials, reproducible setup, diagnostics, release checks and E2E runner |
+| `docs/` | Architecture, developer commands, demo, and design rationale |
 
-IDs and addresses are exactly 32 bytes encoded as 64 hex digits, optionally prefixed with 0x. Integers are unsigned safe JSON numbers or decimal strings within their Compact field width. Booleans must be JSON booleans. Unknown fields, malformed nested objects, inverted lab ranges and oversized requests are rejected. The independent verifier accepts `/derive-pubkey`, `/verify` and `/record-status`; its authorization failures return HTTP 403 with TOKEN_EXPIRED, TOKEN_REVOKED, RECORD_WITHDRAWN or RECIPIENT_MISMATCH. Infrastructure failures return 500, which the end-to-end test never treats as a successful authorization rejection.
+## Validation
 
-## Diagnose a stalled transaction
+The first public-release candidate was locally validated with **86 passing automated checks** (18 Node, 60 Compact, 4 Python encoding, and 4 real Tryton tests), all workspace builds, and clean-checkout integration runs through real local proof generation and finalized transactions. The separate real GNU Health test and full devnet workflow were run as described in [VALIDATION_REPORT.md](VALIDATION_REPORT.md). The committed GitHub Actions workflow is configured to run the build/test subset, **not** the complete Docker-based GNU Health integration; the reports record local evidence, not a promise that every remote CI run is green.
 
-Set `CHART_DIAGNOSTICS=true` in the service environment (or `.env` for the Node development scripts) to log structured proof, wallet balance/submission and indexer-watch stages. These events contain timing, span IDs and public transaction identifiers only; arguments, witnesses and SDK error messages are omitted. The end-to-end runner enables this mode and saves diagnostics/requests under its ignored run directory.
+The earlier [AUDIT_REPORT.md](AUDIT_REPORT.md) is preserved for context; the validation report supersedes its original testing status.
 
-A 15-second `pending` heartbeat means the original operation is still waiting. It is not a retry or an authorization failure. On an end-to-end timeout, results.json records the active HTTP operation and a bounded public node/indexer/proof-server snapshot. The SDK first waits for node finalization inside wallet submission, then polls the indexer for transaction data. Either stage can stall. After an HTTP timeout, the transaction outcome may be unknown: inspect the public transaction ID before taking action, and do not automatically resubmit or reset private state. No automatic transaction retry or security bypass has been added.
+Validation is evidence of reproducibility within the documented local environment, not a clinical or cryptographic security audit. [Read the complete validation evidence](VALIDATION_REPORT.md).
 
-## Trust boundaries and remaining limits
+## What Chart does not guarantee
 
-The bridge API key authorizes a **single local institution**; it is not multi-tenant authentication. All services default to loopback. CORS permits only the local verifier UI (or CHART_VERIFIER_ORIGIN); CORS is not authentication. The verifier service receives the recipient secret and full selected witness bundle, so operate it only as a trusted local service. Browser identities remain in localStorage for demo continuity. Raw bundles remain in bridge process memory and are lost on restart; the submitting caller must retain its response for handoff.
+- **Clinical truth:** a proof validates a predicate about *committed data*; it does not prove that the original measurement was medically accurate, recent, correctly measured, or legitimately sourced.
+- **End-to-end zero disclosure:** the trusted local verifier server receives the selected witness bundle and recipient secret, and the local proof server receives proving material; the institution bridge handles raw bundles and salts. No real patient records belong in this demo.
+- **No metadata leakage:** the ledger exposes identifiers, commitments, scopes, public recipient keys and transaction metadata; vaccination verification additionally reveals scheduling fields.
+- **Real-world consent, legal compliance or identity:** there is no production patient-consent, institutional identity, multi-tenancy, or clinical approval model.
+- **Production availability or a clean dependency audit:** local finalization has historically timed out once without an established root cause. The locked Midnight dependency tree retains **12 moderate runtime entries from one upstream cookie advisory**, with no reachable vulnerable use found in the current demo. Details: [DEPENDENCY_AUDIT.md](DEPENDENCY_AUDIT.md) and [VALIDATION_REPORT.md](VALIDATION_REPORT.md).
 
-The ledger contains commitments, record/token identifiers, scopes, recipient public keys and transaction metadata. Vaccination verification also discloses hasNextDose and nextDoseDate. Repeated predicates can reveal information. Neither a valid proof nor an administrator-created fixture establishes clinical authenticity, source signing, consent compliance, freshness, measurement units or lawful clinical use.
+**Why a blockchain?** The shared ledger can provide a common view of commitment/token status and withdrawal across independent parties. A centralized signed-assertion or off-chain ZK approach may be simpler for other use cases. Chart demonstrates one set of trade-offs; it does not argue that blockchain is necessary for every medical verification task. [Read the design rationale](docs/ARCHITECTURE.md#why-midnight-and-why-not-always).
 
-The pinned Midnight dependency tree has 12 moderate runtime package findings caused by one cookie-injection advisory. No path to the affected cookie-writing API was found in Chart; the installed library remains unpatched. The fixed upstream version is outside the SDKs' declared 0.x-compatible ranges. See [DEPENDENCY_AUDIT.md](DEPENDENCY_AUDIT.md) for every affected dependency, reachability evidence and the fix decision. Do not describe this as a clean dependency audit. See [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md) and the validation report.
+## Contributing
 
-Stop Midnight with `npm run devnet:down`. To stop the synthetic database without exposing its password, run the setup shell with CHART_TEST_DATABASE_PASSWORD loaded from `.validation/database-password`, then `docker compose -f docker-compose.integration.yml --profile integration down`. Avoid volume deletion unless you intend to discard synthetic state. `npm run clean` removes generated contract/build outputs, preserves dependencies and local credentials, and works on Windows and POSIX.
+This is an experimental open-source project meant to be explored and extended. Contributions to negative tests, accessibility, interoperable record mapping, safer local proofs, developer experience, and benchmarks are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md). **Please use synthetic records only.**
 
 ## License
 
-TypeScript/Compact original code is MIT under [LICENSE](LICENSE). The Tryton module files retain their GPL-3.0-or-later SPDX notices; the full [GPL terms](tryton_modules/health_midnight_disclosure/COPYING) are included in its source and Python package. GNU Health, Tryton and Midnight dependencies retain their upstream licenses.
+The original TypeScript and Compact code is licensed under [MIT](LICENSE). The Tryton module is **GPL-3.0-or-later**, with its own [license terms](tryton_modules/health_midnight_disclosure/COPYING). Third-party dependencies retain their respective licenses.
